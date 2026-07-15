@@ -1,12 +1,9 @@
 # DAVE DevBox .gitignore
 # NOTE: .env IS intentionally committed (contains Gemini key for Codespaces auto-load)
 # Make sure your repo is PRIVATE if you commit real API keys.
-
 # Node
 node_modules/
-dashboard/frontend/dist/
 .cache/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -14,29 +11,23 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
-
 # Logs (runtime, not committed)
 dave-workspace/
 *.log
-
 # OS
 .DS_Store
 Thumbs.db
 *.swp
-
 # SSH keys (never commit private keys)
 *.pem
 id_rsa*
 id_ed25519*
 !*.pub
-
 # Tor runtime data
 .tor/data/
 .tor/*.pid
 .tor/tor.log
-
 # Docker
 .docker/
-
 # PID files
 *.pid

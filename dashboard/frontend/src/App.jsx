@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -22,21 +22,19 @@ function App() {
   if (!token) return <Login onLogin={setToken} />;
 
   return (
-    <BrowserRouter>
-      <Layout token={token} onLogout={() => setToken("")}>
-        <Routes>
-          <Route path="/" element={<Dashboard token={token} />} />
-          <Route path="/setup" element={<Setup token={token} />} />
-          <Route path="/chat" element={<AiChat token={token} />} />
-          <Route path="/agents" element={<Agents token={token} />} />
-          <Route path="/terminal" element={<Terminal token={token} />} />
-          <Route path="/files" element={<Files token={token} />} />
-          <Route path="/network" element={<Network token={token} />} />
-          <Route path="/settings" element={<Settings token={token} />} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <Layout token={token} onLogout={() => setToken("")}>
+      <Routes>
+        <Route path="/" element={<Dashboard token={token} />} />
+        <Route path="/setup" element={<Setup token={token} />} />
+        <Route path="/chat" element={<AiChat token={token} />} />
+        <Route path="/agents" element={<Agents token={token} />} />
+        <Route path="/terminal" element={<Terminal token={token} />} />
+        <Route path="/files" element={<Files token={token} />} />
+        <Route path="/network" element={<Network token={token} />} />
+        <Route path="/settings" element={<Settings token={token} />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Layout>
   );
 }
 
