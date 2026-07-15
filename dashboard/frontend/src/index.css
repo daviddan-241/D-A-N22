@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply bg-canvas text-fg-DEFAULT font-mono;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  #root {
+    height: 100%;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-canvas-subtle;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border-DEFAULT rounded;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-3 py-1.5 rounded text-sm font-medium transition-colors duration-150 cursor-pointer;
+  }
+  .btn-primary {
+    @apply btn bg-accent-emphasis text-fg-on_emphasis hover:bg-accent-fg;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-fg-muted border border-border-DEFAULT hover:bg-canvas-subtle hover:text-fg-DEFAULT;
+  }
+  .btn-danger {
+    @apply btn bg-danger-emphasis text-fg-on_emphasis hover:bg-danger-fg;
+  }
+  .input {
+    @apply bg-canvas-inset border border-border-DEFAULT rounded px-3 py-1.5 text-sm text-fg-DEFAULT 
+           focus:outline-none focus:border-accent-fg w-full;
+  }
+  .card {
+    @apply bg-canvas-subtle border border-border-DEFAULT rounded-lg;
+  }
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm text-fg-muted 
+           hover:bg-canvas-subtle hover:text-fg-DEFAULT transition-colors cursor-pointer;
+  }
+  .sidebar-item.active {
+    @apply bg-canvas-subtle text-fg-DEFAULT;
+  }
+}

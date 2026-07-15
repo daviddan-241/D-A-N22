@@ -1,0 +1,54 @@
+# Environment
+.env
+*.env.local
+*.env.*.local
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Workspace data (user-generated)
+workspace/projects/
+workspace/models/
+workspace/logs/
+
+# Docker
+.docker/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.iml

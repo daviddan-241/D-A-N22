@@ -1,0 +1,25 @@
+# Aider configuration — workspace/config/aider.conf.yml
+# Copy to ~/.aider.conf.yml or project root for auto-loading
+
+# Model settings (overridden by aider-start.sh)
+# model: gpt-4o
+
+# Git settings
+git: true
+auto-commits: true
+commit-prompt: "feat: {message}"
+
+# Display
+pretty: true
+stream: true
+dark-mode: true
+
+# Behavior
+auto-lint: true
+auto-test: false
+
+# Files to always add to context
+# read: ["README.md", "ARCHITECTURE.md"]
+
+# Editor integration
+edit-format: diff

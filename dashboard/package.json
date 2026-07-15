@@ -1,0 +1,18 @@
+{
+  "name": "dave-devbox-dashboard",
+  "version": "1.0.0",
+  "description": "DAVE DevBox web dashboard server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0"
+  }
+}
