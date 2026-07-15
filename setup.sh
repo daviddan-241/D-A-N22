@@ -34,7 +34,13 @@ BANNER
 echo -e "${RESET}  ${CYAN}Tor · Gemini-free · All-in-web-app · a-Shell ready${RESET}\n"
 
 # ─── Load .env early ──────────────────────────────────────────────────────────
-[ -f "$DAVE_DIR/.env" ] && set -a && source "$DAVE_DIR/.env" && set +a 2>/dev/null || true
+# Load .env — only set vars not already in environment (Codespaces secrets take priority)
+[ -f "$DAVE_DIR/.env" ] && while IFS= read -r _line || [ -n "$_line" ]; do
+  _line="${_line%%#*}"; _line="${_line#"${_line%%[![:space:]]*}"}"
+  [[ "$_line" == *=* ]] || continue
+  _k="${_line%%=*}"; _v="${_line#*=}"
+  [ -z "${!_k:-}" ] && export "$_k"="$_v"
+done < "$DAVE_DIR/.env" 2>/dev/null || true
 
 # ─── Dirs ─────────────────────────────────────────────────────────────────────
 step "Creating workspace"
@@ -146,7 +152,8 @@ export WORKSPACE_DIR="$WORKSPACE_DIR"
 export PATH="\$PATH:\$HOME/.local/bin"
 
 # Load .env on every shell
-[ -f "\$DAVE_DIR/.env" ] && set -a && source "\$DAVE_DIR/.env" 2>/dev/null && set +a || true
+# Load .env — only set vars not already in environment
+while IFS= read -r _l || [ -n "$_l" ]; do _l="${_l%%#*}"; [[ "$_l" == *=* ]] || continue; _k="${_l%%=*}"; [ -z "${!_k:-}" ] && export "$_k"="${_l#*=}"; done < "$DAVE_DIR/.env" 2>/dev/null || true
 
 # AI agents (choose mode: coder researcher planner reviewer hacker)
 alias dave-ai="bash \$DAVE_DIR/aider-start.sh coder"

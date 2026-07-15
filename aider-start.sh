@@ -14,8 +14,11 @@ info() { echo -e "${CYAN}[AI]${RESET}  $*"; }
 warn() { echo -e "${YELLOW}[AI]${RESET}  $*"; }
 err()  { echo -e "${RED}[AI]${RESET}  $*"; }
 
-# ─── Load .env ────────────────────────────────────────────────────────────────
-[ -f "$DAVE_DIR/.env" ] && set -a && source "$DAVE_DIR/.env" && set +a 2>/dev/null || true
+# ─── Load .env — Codespaces secrets take priority over blank .env values ──────
+[ -f "$DAVE_DIR/.env" ] && while IFS= read -r _l || [ -n "$_l" ]; do
+  _l="${_l%%#*}"; [[ "$_l" == *=* ]] || continue
+  _k="${_l%%=*}"; [ -z "${!_k:-}" ] && export "$_k"="${_l#*=}"
+done < "$DAVE_DIR/.env" 2>/dev/null || true
 
 # ─── Args: agent mode ─────────────────────────────────────────────────────────
 AGENT_MODE="${1:-coder}"
