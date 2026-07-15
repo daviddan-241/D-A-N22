@@ -1,130 +1,102 @@
 import { useState, useEffect } from "react";
 
+const API = (path, token, opts = {}) =>
+  fetch(`/api${path}`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, ...opts });
+
 export default function Files({ token }) {
   const [path, setPath] = useState("");
-  const [entries, setEntries] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [content, setContent] = useState("");
-  const [error, setError] = useState("");
+  const [items, setItems] = useState([]);
+  const [currentPath, setCurrentPath] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
 
-  const load = async (p = "") => {
-    setError("");
-    try {
-      const res = await fetch(`/api/files?path=${encodeURIComponent(p)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setPath(data.path);
-      setEntries(data.entries);
-      setSelected(null);
-      setContent("");
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  useEffect(() => { browse(""); }, []);
 
-  const openFile = async (entry) => {
-    if (entry.type === "dir") return load(entry.path);
-    setError("");
-    try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(entry.path)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setSelected(entry);
-      setContent(data.content);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  async function browse(p) {
+    setErr("");
+    const r = await API(`/files?path=${encodeURIComponent(p)}`, token);
+    const d = await r.json();
+    if (d.error) { setErr(d.error); return; }
+    setItems(d.items || []);
+    setCurrentPath(d.path || "");
+    setPath(p);
+  }
 
-  const saveFile = async () => {
-    if (!selected) return;
+  async function openFile(item) {
+    if (item.isDir) { browse(item.path); return; }
+    const r = await API(`/files/read?path=${encodeURIComponent(item.path)}`, token);
+    const d = await r.json();
+    setEditing({ path: item.path, name: item.name });
+    setEditContent(d.content || "");
+  }
+
+  async function save() {
     setSaving(true);
-    try {
-      const res = await fetch("/api/files/write", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ path: selected.path, content }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+    await API("/files/write", token, { method: "POST", body: JSON.stringify({ path: editing.path, content: editContent }) });
+    setSaving(false);
+  }
 
-  useEffect(() => { load(""); }, []);
+  const isText = (name) => /\.(js|jsx|ts|tsx|py|sh|md|txt|json|yaml|yml|env|conf|cfg|html|css|gitignore|toml|ini|log)$/i.test(name);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border-DEFAULT">
-        <h1 className="font-bold">File Browser</h1>
-        <p className="text-fg-subtle text-xs">workspace/{path || ""}</p>
-      </div>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* File tree */}
-        <div className="w-56 flex-shrink-0 border-r border-border-DEFAULT overflow-y-auto p-2">
-          {path && (
-            <button
-              onClick={() => load(path.includes("/") ? path.split("/").slice(0, -1).join("/") : "")}
-              className="sidebar-item w-full text-xs mb-1"
-            >
-              ← ..
-            </button>
-          )}
-          {entries.map((e) => (
-            <button
-              key={e.path}
-              onClick={() => openFile(e)}
-              className={`sidebar-item w-full text-left text-xs ${selected?.path === e.path ? "active" : ""}`}
-            >
-              <span>{e.type === "dir" ? "▶" : "·"}</span>
-              <span className="truncate">{e.name}</span>
+    <div style={{ display: "flex", height: "100vh", fontFamily: "monospace" }}>
+      {/* File tree */}
+      <div style={{ width: 260, background: "#161b22", borderRight: "1px solid #30363d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid #30363d", fontSize: 13, fontWeight: 600, color: "#c9d1d9" }}>Files</div>
+        <div style={{ padding: "8px 10px", borderBottom: "1px solid #30363d", display: "flex", gap: 6 }}>
+          {[["", "workspace"], ["dave", "devbox"], ["home", "home"]].map(([p, label]) => (
+            <button key={p} onClick={() => browse(p)} style={{ padding: "4px 8px", background: path === p ? "#1f6feb" : "#21262d", border: "none", borderRadius: 5, color: "#c9d1d9", cursor: "pointer", fontSize: 11 }}>
+              {label}
             </button>
           ))}
-          {entries.length === 0 && (
-            <p className="text-fg-subtle text-xs px-3 py-2">Empty directory</p>
-          )}
         </div>
-
-        {/* Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {selected ? (
-            <>
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border-muted bg-canvas-subtle">
-                <span className="text-xs text-fg-muted">{selected.path}</span>
-                <button onClick={saveFile} disabled={saving} className="btn-primary text-xs py-1">
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-              <textarea
-                className="flex-1 bg-canvas-inset text-fg-DEFAULT text-xs font-mono p-4 resize-none focus:outline-none"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                spellCheck={false}
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-fg-subtle text-sm">
-              Select a file to view or edit
+        {currentPath && (
+          <div style={{ padding: "6px 14px", fontSize: 11, color: "#8b949e", borderBottom: "1px solid #21262d", wordBreak: "break-all" }}>
+            {currentPath}
+          </div>
+        )}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {err && <div style={{ color: "#f85149", padding: "8px 14px", fontSize: 12 }}>{err}</div>}
+          {items.map(item => (
+            <div key={item.path} onClick={() => openFile(item)} style={{ padding: "7px 14px", cursor: "pointer", borderBottom: "1px solid #21262d", display: "flex", alignItems: "center", gap: 8, background: editing?.path === item.path ? "#1f6feb22" : "transparent" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#21262d"}
+              onMouseLeave={e => e.currentTarget.style.background = editing?.path === item.path ? "#1f6feb22" : "transparent"}>
+              <span style={{ fontSize: 13 }}>{item.isDir ? "📁" : "📄"}</span>
+              <span style={{ fontSize: 12, color: item.isDir ? "#58a6ff" : "#c9d1d9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
-      {error && (
-        <div className="px-6 py-2 text-danger-fg text-xs border-t border-border-muted">{error}</div>
-      )}
+      {/* Editor */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#0d1117" }}>
+        {editing ? (
+          <>
+            <div style={{ padding: "10px 16px", background: "#161b22", borderBottom: "1px solid #30363d", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ color: "#c9d1d9", fontSize: 13 }}>{editing.name}</span>
+              <span style={{ color: "#8b949e", fontSize: 11, wordBreak: "break-all" }}>{editing.path}</span>
+              <button onClick={save} disabled={saving} style={{ marginLeft: "auto", padding: "6px 14px", background: "#238636", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12 }}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {isText(editing.name) ? (
+              <textarea style={{ flex: 1, padding: 16, background: "#0d1117", border: "none", color: "#c9d1d9", fontFamily: '"Cascadia Code","Fira Code",monospace', fontSize: 13, resize: "none", lineHeight: 1.6, outline: "none" }}
+                value={editContent} onChange={e => setEditContent(e.target.value)} spellCheck={false} />
+            ) : (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#8b949e" }}>
+                Binary file — cannot display
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#8b949e" }}>
+            <span style={{ fontSize: 40 }}>◫</span>
+            <p>Click a file to view or edit it</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

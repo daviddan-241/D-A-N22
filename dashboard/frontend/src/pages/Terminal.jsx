@@ -1,119 +1,86 @@
 import { useEffect, useRef, useState } from "react";
+import { Terminal as XTerm } from "xterm";
+import { FitAddon } from "xterm-addon-fit";
+import "xterm/css/xterm.css";
 
 export default function Terminal({ token }) {
-  const containerRef = useRef(null);
-  const wsRef = useRef(null);
   const termRef = useRef(null);
-  const [status, setStatus] = useState("disconnected");
+  const xtermRef = useRef(null);
+  const wsRef = useRef(null);
+  const fitRef = useRef(null);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let term, fitAddon, ws;
+    const xterm = new XTerm({
+      theme: { background: "#0d1117", foreground: "#c9d1d9", cursor: "#58a6ff", selectionBackground: "rgba(88,166,255,.3)" },
+      fontSize: 14, fontFamily: '"Cascadia Code", "Fira Code", monospace',
+      cursorBlink: true, scrollback: 10000, convertEol: true,
+    });
+    const fit = new FitAddon();
+    xterm.loadAddon(fit);
+    if (termRef.current) {
+      xterm.open(termRef.current);
+      setTimeout(() => fit.fit(), 50);
+    }
+    xtermRef.current = xterm;
+    fitRef.current = fit;
 
-    const init = async () => {
-      // Dynamically import xterm
-      const { Terminal: XTerm } = await import("xterm");
-      const { FitAddon } = await import("xterm-addon-fit");
-      await import("xterm/css/xterm.css");
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?token=${token}`);
+    wsRef.current = ws;
 
-      term = new XTerm({
-        theme: {
-          background: "#0d1117",
-          foreground: "#c9d1d9",
-          cursor: "#58a6ff",
-          selectionBackground: "#264f78",
-          black: "#0d1117",
-          brightBlack: "#6e7681",
-          red: "#f85149",
-          brightRed: "#f85149",
-          green: "#3fb950",
-          brightGreen: "#3fb950",
-          yellow: "#d29922",
-          brightYellow: "#d29922",
-          blue: "#58a6ff",
-          brightBlue: "#58a6ff",
-          magenta: "#bc8cff",
-          brightMagenta: "#bc8cff",
-          cyan: "#39c5cf",
-          brightCyan: "#39c5cf",
-          white: "#c9d1d9",
-          brightWhite: "#ffffff",
-        },
-        fontFamily: "JetBrains Mono, Fira Code, monospace",
-        fontSize: 13,
-        lineHeight: 1.4,
-        cursorBlink: true,
-      });
-
-      fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(containerRef.current);
-      fitAddon.fit();
-      termRef.current = term;
-
-      // WebSocket
-      const wsProto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${wsProto}://${location.host}/ws/terminal?token=${token}`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setStatus("connected");
-        term.write("\r\n\x1b[32m Connected to DAVE DevBox terminal \x1b[0m\r\n\r\n");
-      };
-
-      ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "output") term.write(msg.data);
-      };
-
-      ws.onerror = () => {
-        setStatus("error");
-        term.write("\r\n\x1b[31m Terminal error — check if node-pty is installed \x1b[0m\r\n");
-      };
-
-      ws.onclose = () => {
-        setStatus("disconnected");
-        term.write("\r\n\x1b[33m Connection closed \x1b[0m\r\n");
-      };
-
-      term.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "input", data }));
-        }
-      });
-
-      // Resize
-      const ro = new ResizeObserver(() => {
-        fitAddon.fit();
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-        }
-      });
-      ro.observe(containerRef.current);
+    ws.onopen = () => {
+      setConnected(true);
+      xterm.writeln("\x1b[36m━━━  DAVE DevBox Terminal  ━━━\x1b[0m");
+      xterm.writeln("Type \x1b[33mdave-ai\x1b[0m to start AI coding, \x1b[33mdave-status\x1b[0m for system status");
+      xterm.writeln("");
+    };
+    ws.onclose = () => { setConnected(false); xterm.writeln("\r\n\x1b[31m[Connection closed]\x1b[0m"); };
+    ws.onerror = () => setError("WebSocket error — make sure node-pty is installed");
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.type === "output") xterm.write(m.data);
     };
 
-    init().catch(console.error);
+    xterm.onData((d) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "input", data: d }));
+    });
+
+    const handleResize = () => {
+      try {
+        fit.fit();
+        if (ws.readyState === WebSocket.OPEN) {
+          const { cols, rows } = xterm;
+          ws.send(JSON.stringify({ type: "resize", cols, rows }));
+        }
+      } catch (_) {}
+    };
+    window.addEventListener("resize", handleResize);
 
     return () => {
-      ws?.close();
-      term?.dispose();
+      window.removeEventListener("resize", handleResize);
+      ws.close();
+      xterm.dispose();
     };
-  }, [token]);
+  }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border-DEFAULT">
-        <div>
-          <h1 className="font-bold">Terminal</h1>
-          <p className="text-fg-subtle text-xs">Interactive shell</p>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#0d1117" }}>
+      <div style={{ padding: "10px 16px", background: "#161b22", borderBottom: "1px solid #30363d", display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ fontWeight: 600, color: "#c9d1d9" }}>Terminal</span>
+        <span style={{ color: connected ? "#3fb950" : "#f85149", fontSize: 12 }}>● {connected ? "Connected" : "Disconnected"}</span>
+        {error && <span style={{ color: "#f85149", fontSize: 12 }}>{error}</span>}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {[["dave-ai\r", "AI Coding"], ["dave-status\r", "Status"], ["dave-tor-check\r", "Tor Check"]].map(([cmd, label]) => (
+            <button key={cmd} onClick={() => wsRef.current?.readyState === WebSocket.OPEN && wsRef.current.send(JSON.stringify({ type: "input", data: cmd }))}
+              style={{ padding: "5px 12px", background: "#21262d", border: "1px solid #30363d", color: "#8b949e", borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
+              {label}
+            </button>
+          ))}
         </div>
-        <span className={`text-xs flex items-center gap-1.5 ${
-          status === "connected" ? "text-success-fg" : 
-          status === "error" ? "text-danger-fg" : "text-fg-muted"
-        }`}>
-          <span>●</span> {status}
-        </span>
       </div>
-      <div ref={containerRef} className="flex-1 p-2" style={{ minHeight: 0 }} />
+      <div ref={termRef} style={{ flex: 1, overflow: "hidden", padding: "4px 4px 0" }} />
     </div>
   );
 }

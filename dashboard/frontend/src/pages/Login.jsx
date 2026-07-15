@@ -1,90 +1,45 @@
 import { useState } from "react";
 
 export default function Login({ onLogin }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [user, setUser] = useState("admin");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e) => {
+  async function login(e) {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+      const r = await fetch("/api/auth/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: user, password: pass }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Login failed");
-      onLogin(data.token);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Login failed");
+      onLogin(d.token);
+    } catch (e) { setErr(e.message); }
+    setLoading(false);
+  }
 
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🤖</div>
-          <h1 className="text-2xl font-bold text-fg-DEFAULT">DAVE DevBox</h1>
-          <p className="text-fg-muted text-sm mt-1">Self-hosted AI development environment</p>
+    <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>
+      <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 36, width: "100%", maxWidth: 380 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>⬡</div>
+          <h1 style={{ color: "#58a6ff", margin: 0, fontSize: 22 }}>DAVE DevBox</h1>
+          <p style={{ color: "#8b949e", fontSize: 13, margin: "6px 0 0" }}>Tor · Gemini · a-Shell</p>
         </div>
-
-        {/* Card */}
-        <div className="card p-6">
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label className="block text-xs text-fg-muted mb-1.5 uppercase tracking-wide">
-                Username
-              </label>
-              <input
-                className="input"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
-                autoComplete="username"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-fg-muted mb-1.5 uppercase tracking-wide">
-                Password
-              </label>
-              <input
-                className="input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                required
-              />
-            </div>
-            {error && (
-              <div className="bg-danger-emphasis/10 border border-danger-emphasis/30 rounded px-3 py-2 text-danger-fg text-sm">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-2 mt-2"
-            >
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-fg-subtle text-xs mt-4">
-          Default: admin / changeme — change in .env
-        </p>
+        <form onSubmit={login}>
+          <input style={{ width: "100%", padding: "11px 14px", background: "#0d1117", border: "1px solid #30363d", borderRadius: 7, color: "#c9d1d9", fontSize: 14, marginBottom: 12, boxSizing: "border-box" }}
+            value={user} onChange={e => setUser(e.target.value)} placeholder="Username" autoComplete="username" />
+          <input style={{ width: "100%", padding: "11px 14px", background: "#0d1117", border: "1px solid #30363d", borderRadius: 7, color: "#c9d1d9", fontSize: 14, marginBottom: 16, boxSizing: "border-box" }}
+            type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Password" autoComplete="current-password" />
+          {err && <p style={{ color: "#f85149", fontSize: 13, marginBottom: 12 }}>{err}</p>}
+          <button type="submit" disabled={loading} style={{ width: "100%", padding: 12, background: "#238636", border: "none", borderRadius: 7, color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        </form>
+        <p style={{ color: "#8b949e", fontSize: 12, textAlign: "center", marginTop: 16 }}>Default: admin / dave2024</p>
       </div>
     </div>
   );
