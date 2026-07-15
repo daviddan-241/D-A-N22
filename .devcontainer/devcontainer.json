@@ -5,11 +5,7 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": { "version": "20" },
     "ghcr.io/devcontainers/features/python:1": { "version": "3.11" },
-    "ghcr.io/devcontainers/features/go:1": { "version": "1.22" },
-    "ghcr.io/devcontainers/features/rust:1": {},
-    "ghcr.io/devcontainers/features/java:1": { "version": "17" },
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
 
   "postCreateCommand": "bash setup.sh",
@@ -18,41 +14,33 @@
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance",
         "bradlc.vscode-tailwindcss",
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
-        "eamodio.gitlens",
-        "golang.go",
-        "rust-lang.rust-analyzer",
-        "ms-azuretools.vscode-docker",
-        "ms-vscode.makefile-tools",
-        "redhat.vscode-yaml",
-        "tamasfe.even-better-toml"
+        "eamodio.gitlens"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash",
-        "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "python.defaultInterpreterPath": "/usr/local/bin/python3"
+        "terminal.integrated.defaultProfile.linux": "bash"
       }
+    },
+    "codespaces": {
+      "openFiles": ["ASHELL.md"]
     }
   },
 
-  "forwardPorts": [3000, 11434],
+  "forwardPorts": [3000, 9050],
   "portsAttributes": {
     "3000": {
       "label": "DAVE Dashboard",
-      "onAutoForward": "notify"
+      "onAutoForward": "openBrowserOnce",
+      "visibility": "private"
     },
-    "11434": {
-      "label": "Ollama AI",
-      "onAutoForward": "silent"
+    "9050": {
+      "label": "Tor SOCKS5",
+      "onAutoForward": "silent",
+      "visibility": "private"
     }
   },
 
-  "remoteUser": "codespace",
-  "mounts": [
-    "source=${localWorkspaceFolder}/workspace,target=/workspaces/dave-devbox/workspace,type=bind,consistency=cached"
-  ]
+  "remoteUser": "codespace"
 }

@@ -1,262 +1,162 @@
 # DAVE DevBox
 
-> **Self-Hosted AI Development Environment**
-> Free-tier friendly · GitHub Codespaces ready · iPhone a-Shell compatible
+> **Self-Hosted AI Dev Environment — Tor-routed, Anonymous, Free**
+> One command. Everything auto-starts. iPhone-ready.
 
 ```
-Clone → Open Codespace → ./setup.sh → Done
+Open Codespace → setup.sh runs automatically → Everything is live
 ```
+
+**Only thing you need:** A free Google Gemini API key.
+Get one in 60 seconds: https://aistudio.google.com/apikey
 
 ---
 
-## What Is DAVE DevBox?
-
-DAVE (Development AI Virtual Environment) DevBox is a portable, reproducible AI-powered development environment you can run anywhere — GitHub Codespaces, a VPS, your laptop, or inside Docker. It gives you:
+## What You Get (All Free, All Auto-Starting)
 
 | Feature | Details |
 |---|---|
-| 🤖 **AI Coding** | Aider + OpenAI / Gemini / OpenRouter / Ollama |
-| 🖥️ **Full Dev Stack** | Python, Node.js, Go, Rust, Java |
-| 🌐 **Web Dashboard** | Mobile-first React UI with terminal, AI chat, file browser |
-| 🤖 **Browser Automation** | Playwright + Selenium (Chromium) |
-| 📱 **iPhone Access** | SSH via a-Shell app |
-| 🔒 **Secure by Default** | Key-only SSH, no hardcoded secrets |
-| 🐳 **Docker Ready** | `docker compose up` and go |
+| 🤖 **AI Coding** | Aider + Gemini (free tier — unlimited flash model) |
+| 🧅 **Tor Routing** | All traffic anonymized via Tor by default |
+| 🌐 **Web Dashboard** | Mobile-first UI — terminal, AI chat, file browser, status |
+| 📱 **iPhone SSH** | Connect via a-Shell → see ASHELL.md |
+| 🔒 **Anonymous** | `anon-curl`, `torsocks`, proxychains pre-configured |
+| 🖥️ **Full Dev Stack** | Python, Node.js, Go, Rust |
 
 ---
 
-## Quick Start
+## Setup (3 steps total)
 
-### GitHub Codespaces (recommended — free tier)
+### Step 1: Get Free Gemini API Key
 
-1. Fork this repository
-2. Click **Code → Codespaces → Create codespace**
-3. Wait for the environment to initialize
-4. Run:
-   ```bash
-   ./setup.sh
-   ```
-5. Add your API keys to `.env`
-6. Run `dave-aider` to start coding with AI
+Go to https://aistudio.google.com/apikey → Create API Key → Copy it
 
-### Local / VPS
+### Step 2: Add Key to .env in This Repo
 
-```bash
-git clone https://github.com/YOUR_USERNAME/dave-devbox
-cd dave-devbox
-chmod +x setup.sh
-./setup.sh
+Edit `.env` in this repo (already committed — just fill in your key):
+
+```
+GEMINI_API_KEY=YOUR_KEY_HERE
 ```
 
-### Docker
+Commit and push that one change.
 
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-docker compose up
-```
+### Step 3: Open Codespace
+
+1. Click **Code → Codespaces → Create codespace**
+2. Wait ~5 minutes
+3. `setup.sh` runs automatically
+4. Everything starts: Dashboard · Tor · SSH · Aider
+
+**That's it.**
 
 ---
 
-## Configuration
-
-Copy `.env.example` to `.env` and fill in at least one AI provider:
+## Commands (auto-available after setup)
 
 ```bash
-cp .env.example .env
-nano .env
-```
-
-```env
-# At minimum, add one of:
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-OPENROUTER_API_KEY=...
-OLLAMA_URL=http://localhost:11434   # local/offline
-```
-
-DAVE auto-detects which providers are available.
-
----
-
-## Commands
-
-After `source ~/.bashrc`:
-
-| Command | Description |
-|---|---|
-| `dave-aider` | Start AI coding assistant |
-| `dave-ssh` | Show SSH connection info |
-| `dave-dash` | Start web dashboard (port 3000) |
-| `dave-status` | Show system status |
-| `./aider-start.sh` | Aider with auto-provider selection |
-| `./ssh-setup.sh` | Configure SSH / show connect info |
-
----
-
-## Web Dashboard
-
-The dashboard runs on port **3000** and provides:
-
-- **Terminal** — browser-based terminal (xterm.js + node-pty)
-- **AI Chat** — chat with your configured AI provider
-- **Project Browser** — file tree for your workspace
-- **Environment** — manage .env variables
-- **System Status** — CPU, memory, disk, running services
-
-Start it:
-```bash
-dave-dash
-# or
-cd dashboard && node server.js
+dave-ai            # Start AI coding with Gemini (free)
+dave-status        # Check all services
+dave-tor-check     # Verify your anonymous Tor IP
+dave-dash          # Start dashboard if it stopped
+anon-curl URL      # Fetch any URL through Tor
+anon-wget URL      # Download through Tor
 ```
 
 ---
 
-## AI Providers
+## Tor & Anonymous Web Access
 
-DAVE DevBox supports multiple AI providers with automatic fallback:
-
-### Cloud APIs
-
-| Provider | Key Variable | Notes |
-|---|---|---|
-| OpenAI | `OPENAI_API_KEY` | GPT-4o default |
-| Google Gemini | `GEMINI_API_KEY` | Gemini 1.5 Pro |
-| OpenRouter | `OPENROUTER_API_KEY` | 100+ models |
-| Custom | `OPENAI_API_BASE` | Any OpenAI-compatible API |
-
-### Local AI (Offline)
+All `torsocks` and `proxychains` routes go through Tor automatically.
 
 ```bash
-# Start Ollama
-ollama serve
+# Verify you're anonymous
+dave-tor-check
+# → Shows Tor exit node IP (not your real IP)
 
-# Pull a model
-ollama pull llama3
-ollama pull codestral
-ollama pull deepseek-coder
+# Any command through Tor
+torsocks curl https://example.com
+torsocks wget https://example.com/file.zip
 
-# Then aider picks it up automatically
-dave-aider
+# Anonymous curl alias
+anon-curl https://api.something.com
+
+# Check Tor vs real IP
+curl https://api.ipify.org          # your real IP
+torsocks curl https://api.ipify.org # Tor exit IP (different)
+
+# New Tor circuit (new anonymous IP)
+pkill -HUP tor
 ```
 
 ---
 
-## Aider AI Coding
-
-[Aider](https://aider.chat) is an AI pair programmer that works in your terminal:
+## AI Coding with Aider + Gemini (Free)
 
 ```bash
-dave-aider                    # auto-selects provider
-dave-aider --model gpt-4o    # force a specific model
+cd my-project
+dave-ai
 
 # Inside aider:
-/add src/main.py              # add file to context
-/ask How does this work?      # ask without editing
-/undo                         # undo last change
-/git diff                     # run git command
+/add src/main.py        # add file to context
+/ask how does X work?  # ask without editing
+/undo                   # undo last change
+/exit                   # quit
 ```
+
+Free Gemini model: `gemini-2.0-flash` — fast, generous limits, no credit card.
 
 ---
 
-## Browser Automation
+## iPhone Access
 
-DAVE includes Playwright and Selenium:
+See **[ASHELL.md](ASHELL.md)** for full step-by-step a-Shell SSH setup.
 
-```python
-# examples/browser/playwright_demo.py
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    browser = p.chromium.launch()
-    page = browser.new_page()
-    page.goto("https://example.com")
-    print(page.title())
-    browser.close()
-```
-
-Run examples:
+Quick version:
 ```bash
-python3 workspace/scripts/browser_demo.py
-node workspace/scripts/browser_demo.js
+# In Codespace terminal:
+echo $CODESPACE_NAME   # get your name
+
+# On iPhone a-Shell:
+ssh -p 443 YOUR_GITHUB_USERNAME@YOUR_CODESPACE_NAME.ssh.github.com
 ```
 
 ---
 
-## iPhone Access (a-Shell)
+## Dashboard
 
-1. Install [a-Shell](https://apps.apple.com/app/a-shell/id1473805438) from the App Store
-2. Generate a key in a-Shell:
-   ```
-   ssh-keygen -t ed25519
-   cat ~/.ssh/id_ed25519.pub
-   ```
-3. Add the public key to your server's `~/.ssh/authorized_keys`
-4. Run `./ssh-setup.sh` to get connection details
-5. Connect:
-   ```
-   ssh username@your-server
-   ```
-6. Use tmux to keep sessions alive:
-   ```
-   tmux new -s dave
-   # Ctrl+B D to detach, tmux attach -t dave to reconnect
-   ```
+Auto-starts at http://localhost:3000 (forwarded by Codespaces to a public URL).
+
+Login: `admin` / `dave2024` (change in `.env`)
+
+Features:
+- **System** — CPU, memory, AI provider status
+- **Terminal** — browser terminal (works from iPhone browser too!)
+- **AI Chat** — chat with Gemini from any device
+- **Files** — browse and edit workspace files
 
 ---
 
-## Workspace Structure
-
-```
-workspace/
-├── projects/          # Your code projects
-├── models/            # Local AI model configs
-├── logs/              # Setup and runtime logs
-├── config/            # Shared configuration files
-├── scripts/           # Reusable utility scripts
-└── templates/         # Project starter templates
-```
-
----
-
-## Docker
+## Docker (alternative to Codespaces)
 
 ```bash
-# Start everything
+cp .env.example .env
+# Add your GEMINI_API_KEY
 docker compose up -d
-
-# Stop
-docker compose down
-
-# View logs
-docker compose logs -f devbox
-
-# Shell into container
-docker exec -it dave-devbox bash
-
-# Pull an Ollama model
-docker exec -it dave-ollama ollama pull llama3
 ```
 
 ---
 
-## Security
+## FAQ
 
-- SSH key-only authentication (no passwords)
-- No hardcoded API keys — `.env` file only
-- `.env` is gitignored by default
-- Dashboard supports username/password auth
-- All secrets via environment variables
+**Is Gemini actually free?**
+Yes. The Flash model has a generous free tier (15 RPM, 1M tokens/day). No credit card needed.
 
----
+**Does everything work without any other keys?**
+Yes. Gemini key → Aider works. Dashboard works. Tor works. All free.
 
-## Troubleshooting
+**Can I add other AI providers later?**
+Yes — add `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or run `ollama serve` for local AI.
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed fixes.
-
----
-
-## License
-
-MIT — do whatever you want with it.
+**Is Tor actually anonymous?**
+Tor hides your IP from websites you visit. It does not make you fully anonymous if you log in to accounts or share identifying info.

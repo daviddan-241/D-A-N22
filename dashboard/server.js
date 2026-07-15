@@ -1,7 +1,7 @@
 /**
- * DAVE DevBox — Web Dashboard Server
- * Node.js + Express backend
- * Serves React frontend + provides REST/WebSocket APIs
+ * DAVE DevBox Dashboard Server
+ * Node.js + Express — serves React UI + REST/WebSocket APIs
+ * Gemini-first AI provider
  */
 "use strict";
 
@@ -10,42 +10,32 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { execSync, spawn } = require("child_process");
+const { execSync, exec } = require("child_process");
 const { WebSocketServer } = require("ws");
 const crypto = require("crypto");
 
-// ─── Environment ──────────────────────────────────────────────────────────────
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+// ─── Load .env ────────────────────────────────────────────────────────────────
+const envPath = path.join(__dirname, "..", ".env");
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, "utf8").split("\n").forEach((line) => {
+    line = line.trim();
+    if (line && !line.startsWith("#") && line.includes("=")) {
+      const [k, ...v] = line.split("=");
+      process.env[k.trim()] = process.env[k.trim()] || v.join("=").trim();
+    }
+  });
+}
 
 const PORT = parseInt(process.env.DASHBOARD_PORT || "3000", 10);
-const SECRET = process.env.DASHBOARD_SECRET || crypto.randomBytes(32).toString("hex");
 const DASH_USER = process.env.DASHBOARD_USERNAME || "admin";
-const DASH_PASS = process.env.DASHBOARD_PASSWORD || "changeme";
+const DASH_PASS = process.env.DASHBOARD_PASSWORD || "dave2024";
 
-// ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
+const sessions = new Map();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Session store (in-memory; swap for Redis in production)
-const sessions = new Map();
-
-function generateToken() {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-function requireAuth(req, res, next) {
-  const token = req.headers["authorization"]?.replace("Bearer ", "");
-  if (!token || !sessions.has(token)) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.session = sessions.get(token);
-  next();
-}
-
-// ─── CORS (dev) ───────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -54,11 +44,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Auth Routes ──────────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  const token = (req.headers["authorization"] || "").replace("Bearer ", "");
+  if (!token || !sessions.has(token)) return res.status(401).json({ error: "Unauthorized" });
+  req.session = sessions.get(token);
+  next();
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
   if (username === DASH_USER && password === DASH_PASS) {
-    const token = generateToken();
+    const token = crypto.randomBytes(32).toString("hex");
     sessions.set(token, { username, loginAt: Date.now() });
     res.json({ token, username });
   } else {
@@ -67,31 +64,41 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
-  const token = req.headers["authorization"]?.replace("Bearer ", "");
-  sessions.delete(token);
+  sessions.delete((req.headers["authorization"] || "").replace("Bearer ", ""));
   res.json({ ok: true });
 });
 
 // ─── Health ───────────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "1.0.0", ts: new Date().toISOString() });
-});
+app.get("/api/health", (_req, res) => res.json({ status: "ok", version: "2.0.0" }));
 
 // ─── System Status ────────────────────────────────────────────────────────────
-app.get("/api/system", requireAuth, (_req, res) => {
-  const cpus = os.cpus();
+app.get("/api/system", requireAuth, async (_req, res) => {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
 
-  let diskInfo = {};
+  // Disk
+  let disk = { total: "N/A", used: "N/A", free: "N/A", percent: "N/A" };
   try {
     const df = execSync("df -h / 2>/dev/null | tail -1", { encoding: "utf8" }).trim().split(/\s+/);
-    diskInfo = { total: df[1], used: df[2], free: df[3], percent: df[4] };
-  } catch (_) {
-    diskInfo = { total: "N/A", used: "N/A", free: "N/A", percent: "N/A" };
-  }
+    disk = { total: df[1], used: df[2], free: df[3], percent: df[4] };
+  } catch (_) {}
 
+  // Tor status
+  let torRunning = false;
+  let torIp = null;
+  try {
+    execSync("pgrep -x tor", { stdio: "ignore" });
+    torRunning = true;
+    torIp = execSync("torsocks curl -sf --max-time 5 https://api.ipify.org 2>/dev/null", { encoding: "utf8" }).trim();
+  } catch (_) {}
+
+  // Real IP
+  let realIp = null;
+  try {
+    realIp = execSync("curl -sf --max-time 5 https://api.ipify.org 2>/dev/null", { encoding: "utf8" }).trim();
+  } catch (_) {}
+
+  // Ollama models
   let ollamaModels = [];
   try {
     const raw = execSync("ollama list 2>/dev/null", { encoding: "utf8" });
@@ -101,227 +108,190 @@ app.get("/api/system", requireAuth, (_req, res) => {
   res.json({
     hostname: os.hostname(),
     platform: os.platform(),
-    arch: os.arch(),
     uptime: os.uptime(),
-    cpu: {
-      model: cpus[0]?.model || "Unknown",
-      cores: cpus.length,
-      loadavg: os.loadavg(),
-    },
+    cpu: { cores: os.cpus().length, loadavg: os.loadavg() },
     memory: {
       total: totalMem,
-      used: usedMem,
-      free: freeMem,
-      percentUsed: Math.round((usedMem / totalMem) * 100),
+      used: totalMem - freeMem,
+      percentUsed: Math.round(((totalMem - freeMem) / totalMem) * 100),
     },
-    disk: diskInfo,
-    ollama: {
-      running: ollamaModels.length > 0,
-      models: ollamaModels,
-    },
-    node: process.version,
+    disk,
+    tor: { running: torRunning, ip: torIp, realIp },
+    ollama: { running: ollamaModels.length > 0, models: ollamaModels },
     env: {
-      hasOpenAI: !!process.env.OPENAI_API_KEY,
       hasGemini: !!process.env.GEMINI_API_KEY,
+      hasOpenAI: !!process.env.OPENAI_API_KEY,
       hasOpenRouter: !!process.env.OPENROUTER_API_KEY,
-      hasOllama: !!process.env.OLLAMA_URL,
     },
   });
 });
 
-// ─── File Browser ─────────────────────────────────────────────────────────────
-const WORKSPACE_DIR = path.join(os.homedir(), "workspace");
+// ─── AI Chat (Gemini-first) ───────────────────────────────────────────────────
+app.post("/api/chat", requireAuth, async (req, res) => {
+  const { messages } = req.body;
+  if (!messages?.length) return res.status(400).json({ error: "No messages" });
 
-function safePath(relPath) {
-  const resolved = path.resolve(WORKSPACE_DIR, relPath || "");
-  if (!resolved.startsWith(WORKSPACE_DIR)) throw new Error("Path traversal denied");
-  return resolved;
+  const userMessages = messages.filter((m) => m.role !== "system");
+
+  // ── Gemini ──
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const GEMINI_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" +
+        `?key=${process.env.GEMINI_API_KEY}`;
+
+      const contents = userMessages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      const geminiRes = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 2048 } }),
+      });
+      const data = await geminiRes.json();
+      if (!geminiRes.ok) throw new Error(data.error?.message || "Gemini error");
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return res.json({ reply, provider: "gemini" });
+    } catch (err) {
+      return res.status(500).json({ error: `Gemini: ${err.message}` });
+    }
+  }
+
+  // ── OpenAI fallback ──
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: "gpt-4o", messages: userMessages, max_tokens: 2048 }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error?.message);
+      return res.json({ reply: d.choices[0].message.content, provider: "openai" });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Ollama fallback ──
+  try {
+    const base = process.env.OLLAMA_URL || "http://localhost:11434";
+    const r = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: process.env.OLLAMA_MODEL || "llama3", messages: userMessages, stream: false }),
+    });
+    const d = await r.json();
+    return res.json({ reply: d.message?.content || "", provider: "ollama" });
+  } catch (_) {}
+
+  res.status(503).json({
+    error: "No AI provider configured. Add GEMINI_API_KEY to .env (free: aistudio.google.com/apikey)",
+  });
+});
+
+// ─── Tor control ──────────────────────────────────────────────────────────────
+app.post("/api/tor/newcircuit", requireAuth, (_req, res) => {
+  exec("pkill -HUP tor 2>/dev/null", () => {
+    setTimeout(async () => {
+      try {
+        const ip = execSync("torsocks curl -sf --max-time 10 https://api.ipify.org 2>/dev/null", {
+          encoding: "utf8",
+        }).trim();
+        res.json({ ok: true, newIp: ip });
+      } catch (_) {
+        res.json({ ok: true, newIp: "refreshing..." });
+      }
+    }, 3000);
+  });
+});
+
+// ─── File browser ─────────────────────────────────────────────────────────────
+const WORKSPACE = path.join(os.homedir(), "dave-workspace");
+
+function safe(rel) {
+  const r = path.resolve(WORKSPACE, rel || "");
+  if (!r.startsWith(WORKSPACE)) throw new Error("Invalid path");
+  return r;
 }
 
 app.get("/api/files", requireAuth, (req, res) => {
   try {
-    const dir = safePath(req.query.path || "");
+    const dir = safe(req.query.path || "");
     const entries = fs.readdirSync(dir, { withFileTypes: true }).map((e) => ({
       name: e.name,
       type: e.isDirectory() ? "dir" : "file",
-      path: path.relative(WORKSPACE_DIR, path.join(dir, e.name)),
+      path: path.relative(WORKSPACE, path.join(dir, e.name)),
     }));
-    res.json({ path: path.relative(WORKSPACE_DIR, dir), entries });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.json({ path: path.relative(WORKSPACE, dir), entries });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 
 app.get("/api/files/read", requireAuth, (req, res) => {
   try {
-    const filePath = safePath(req.query.path || "");
-    const stat = fs.statSync(filePath);
-    if (stat.size > 1024 * 1024) return res.status(400).json({ error: "File too large (>1MB)" });
-    const content = fs.readFileSync(filePath, "utf8");
-    res.json({ content, path: req.query.path });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    const p = safe(req.query.path || "");
+    if (fs.statSync(p).size > 512 * 1024) return res.status(400).json({ error: "File too large" });
+    res.json({ content: fs.readFileSync(p, "utf8"), path: req.query.path });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 
 app.post("/api/files/write", requireAuth, (req, res) => {
   try {
-    const filePath = safePath(req.body.path || "");
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, req.body.content || "", "utf8");
+    const p = safe(req.body.path || "");
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, req.body.content || "");
     res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
-});
-
-// ─── AI Chat Proxy ────────────────────────────────────────────────────────────
-app.post("/api/chat", requireAuth, async (req, res) => {
-  const { messages, provider } = req.body;
-  if (!messages?.length) return res.status(400).json({ error: "No messages" });
-
-  // Simple provider detection
-  if (process.env.OPENAI_API_KEY && (provider === "openai" || !provider)) {
-    try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-4o",
-          messages,
-          max_tokens: 2048,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) return res.status(response.status).json({ error: data.error?.message });
-      return res.json({ reply: data.choices[0].message.content, provider: "openai" });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-
-  if (process.env.OLLAMA_URL || provider === "ollama") {
-    try {
-      const ollamaBase = process.env.OLLAMA_URL || "http://localhost:11434";
-      const response = await fetch(`${ollamaBase}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: process.env.OLLAMA_MODEL || "llama3",
-          messages,
-          stream: false,
-        }),
-      });
-      const data = await response.json();
-      return res.json({ reply: data.message?.content, provider: "ollama" });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-
-  res.status(503).json({ error: "No AI provider configured. Add keys to .env" });
 });
 
 // ─── WebSocket Terminal ───────────────────────────────────────────────────────
 const wss = new WebSocketServer({ server, path: "/ws/terminal" });
-
 wss.on("connection", (ws, req) => {
-  // Auth check via query param token
-  const url = new URL(req.url, `http://localhost`);
-  const token = url.searchParams.get("token");
-  if (!token || !sessions.has(token)) {
-    ws.close(1008, "Unauthorized");
-    return;
-  }
+  const token = new URL(req.url, "http://x").searchParams.get("token");
+  if (!token || !sessions.has(token)) { ws.close(1008, "Unauthorized"); return; }
 
-  let pty;
   try {
-    const nodePty = require("node-pty");
-    pty = nodePty.spawn(process.env.SHELL || "/bin/bash", [], {
-      name: "xterm-256color",
-      cols: 120,
-      rows: 40,
-      cwd: WORKSPACE_DIR,
-      env: process.env,
+    const pty = require("node-pty").spawn(process.env.SHELL || "/bin/bash", [], {
+      name: "xterm-256color", cols: 120, rows: 40,
+      cwd: WORKSPACE, env: process.env,
     });
-
-    pty.onData((data) => {
-      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "output", data }));
-    });
-
+    pty.onData((d) => ws.readyState === ws.OPEN && ws.send(JSON.stringify({ type: "output", data: d })));
     ws.on("message", (raw) => {
-      try {
-        const msg = JSON.parse(raw);
-        if (msg.type === "input") pty.write(msg.data);
-        if (msg.type === "resize") pty.resize(msg.cols, msg.rows);
-      } catch (_) {
-        pty.write(raw.toString());
-      }
+      try { const m = JSON.parse(raw); if (m.type === "input") pty.write(m.data); if (m.type === "resize") pty.resize(m.cols, m.rows); }
+      catch (_) { pty.write(raw.toString()); }
     });
-
     ws.on("close", () => pty.kill());
   } catch (_) {
-    // node-pty not available — send friendly message
-    ws.send(JSON.stringify({
-      type: "output",
-      data: "Terminal requires node-pty. Run: npm install node-pty\r\n",
-    }));
-    ws.on("close", () => {});
+    ws.send(JSON.stringify({ type: "output", data: "Install node-pty for terminal support: npm install node-pty\r\n" }));
   }
 });
 
-// ─── Serve React Frontend ─────────────────────────────────────────────────────
-const frontendDist = path.join(__dirname, "frontend", "dist");
-if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-  app.get("*", (_req, res) => res.sendFile(path.join(frontendDist, "index.html")));
+// ─── Serve frontend ───────────────────────────────────────────────────────────
+const distDir = path.join(__dirname, "frontend", "dist");
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get("*", (_, res) => res.sendFile(path.join(distDir, "index.html")));
 } else {
-  // Fallback minimal HTML
-  app.get("/", (_req, res) => {
-    res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DAVE DevBox</title>
-  <style>
-    body { font-family: monospace; background: #0d1117; color: #c9d1d9; 
-           display: flex; align-items: center; justify-content: center; 
-           min-height: 100vh; margin: 0; }
-    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; 
-            padding: 2rem; max-width: 480px; width: 100%; }
-    h1 { color: #58a6ff; margin-top: 0; }
-    .status { color: #3fb950; }
-    .cmd { background: #21262d; padding: 0.5rem 1rem; border-radius: 4px; 
-           margin: 0.25rem 0; display: block; font-size: 0.85rem; }
-    a { color: #58a6ff; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>DAVE DevBox</h1>
-    <p class="status">Server running on port ${PORT}</p>
-    <p>Build the frontend to enable the full dashboard:</p>
-    <code class="cmd">cd dashboard/frontend && npm install && npm run build</code>
-    <p>API endpoints available:</p>
-    <code class="cmd">GET  /api/health</code>
-    <code class="cmd">POST /api/auth/login</code>
-    <code class="cmd">GET  /api/system</code>
-    <code class="cmd">GET  /api/files</code>
-    <code class="cmd">POST /api/chat</code>
-  </div>
-</body>
-</html>`);
-  });
+  app.get("/", (_, res) => res.send(`<!DOCTYPE html><html><head><title>DAVE DevBox</title>
+<style>body{background:#0d1117;color:#c9d1d9;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:2rem;max-width:480px;width:100%}
+h1{color:#58a6ff;margin:0 0 1rem}code{background:#21262d;padding:.2rem .5rem;border-radius:4px;font-size:.85rem;display:block;margin:.3rem 0}
+a{color:#58a6ff}</style></head><body><div class="box">
+<h1>DAVE DevBox ✓</h1><p>Server running on port ${PORT}.</p>
+<p>Build the frontend:</p>
+<code>cd dashboard/frontend && npm install && npm run build</code>
+<p>API: <a href="/api/health">/api/health</a></p></div></body></html>`));
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`DAVE DevBox Dashboard running on http://0.0.0.0:${PORT}`);
-  console.log(`API health: http://localhost:${PORT}/api/health`);
+  console.log(`DAVE Dashboard: http://0.0.0.0:${PORT}`);
+  console.log(`API: http://localhost:${PORT}/api/health`);
 });
-
-module.exports = { app, server };
